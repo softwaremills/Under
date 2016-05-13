@@ -60,11 +60,11 @@ namespace Under {
 
 	static class LinqExtensions {
 		public static TResult[] Map<TSource, TResult>(this IEnumerable<TSource> source, Func<TSource, TResult> transformer) {
-			if (source == null) return null;
+			if (source == null) return new TResult[0];
 			var list = source as IList<TSource>;
 			if (list != null) {
 				var count = list.Count;
-				if (count == 0) return null;
+				if (count == 0) return new TResult[0];
 				var result = new TResult[count];
 				for (var index = 0; index < count; index++)
 					result[index] = transformer(list[index]);
@@ -72,7 +72,7 @@ namespace Under {
 			} else {
 				var collection = source as ICollection<TSource>;
 				var count = collection != null ? collection.Count : source.Count();
-				if (count == 0) return null;
+				if (count == 0) return new TResult[0];
 				var result = new TResult[count];
 				var resultIndex = 0; foreach (var item in source) result[resultIndex++] = transformer(item);
 				return result;
@@ -116,7 +116,7 @@ namespace Under {
 		}
 
 		public static void Main(string[] args) {
-			var matchesPattern = new Regex(".*_$", RegexOptions.Compiled);
+			var matchesPattern = new Regex(".+_$", RegexOptions.Compiled);
 			var possiblePattern = new Regex(@"[0-9A-Za-z_\$]+");
 			var illegalBeginningCharPattern = new Regex("[0-9]");
 
@@ -188,7 +188,8 @@ namespace Under {
 					otherExists[word] = true;
 					if (letters == null) {
 						foreach (var ch in word) {
-							otherLetterFrequency[ch] = otherLetterFrequency.Get(ch) + 1;
+							if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))
+								otherLetterFrequency[ch] = otherLetterFrequency.Get(ch) + 1;
 						}
 					}
 				}
@@ -253,8 +254,9 @@ namespace Under {
 
 			// Replace everything by its designated replacement
 			foreach (var item in replacementWork) {
+				var original = new Regex(@"\b" + item.Original.Replace("$", @"\$") + @"\b");
 				for (int index = 0, len = fileContents.Length; index < len; ++index) {
-					fileContents[index] = fileContents[index].Replace(item.Original, item.Replacement);
+					fileContents[index] = original.Replace(fileContents[index], item.Replacement);
 				}
 			}
 
