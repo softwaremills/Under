@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 /*                                                ______           
@@ -116,15 +117,21 @@ namespace Under {
 		}
 
 		public static void Main(string[] args) {
-			var matchesPattern = new Regex(".+_$", RegexOptions.Compiled);
+			// Applied to individual words to see if they should be replaced
+			// Good: identifiers_ like_ this_
+			// Bad: __directives__ (leave those alone)
+			var matchesPattern = new Regex(@"^[0-9A-Za-z\$]+_$", RegexOptions.Compiled);
+
+			// Applied to the text content of all files to retrieve identifiers and non-identifiers
 			var possiblePattern = new Regex(@"[0-9A-Za-z_\$]+");
+
+			// Don't begin an identifier with this
 			var illegalBeginningCharPattern = new Regex("[0-9]");
 
+			// Parse command-line arguments; get the letters to use for replacements and the list of files to modify
 			var fileNames = new List<string>();
 			string[] letters = null;
 			var help = args.Length == 0;
-
-			// Parse command-line arguments; get the letters to use for replacements and the list of files to modify
 			for (int index = 0, length = args.Length; index < length; ++index) {
 				var arg = args[index];
 				var larg = arg.ToLowerInvariant();
@@ -147,7 +154,7 @@ namespace Under {
 			}
 
 			Console.WriteLine("Under Identifier Obfuscator (c) 2010-2016 by Anthony J. Mills");
-			Console.WriteLine("Open Source, MIT license @ http://github");
+			Console.WriteLine("Open Source, MIT license @ http://github.com/softwaremills/Under");
 			Console.WriteLine();
 
 			if (help) {
@@ -179,13 +186,13 @@ namespace Under {
 
 			// Get word frequency of _ words and letter frequency distribution of non-_ words
 			var matchFreq = new Dictionary<string, int>();
-			var otherExists = new Dictionary<string, bool>();
+			var otherExists = new HashSet<string>();
 			var otherLetterFrequency = new Dictionary<char, int>();
 			foreach (var word in words) {
 				if (matchesPattern.IsMatch(word)) {
 					matchFreq[word] = matchFreq.Get(word) + 1;
 				} else {
-					otherExists[word] = true;
+					otherExists.Add(word);
 					if (letters == null) {
 						foreach (var ch in word) {
 							if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))
@@ -205,7 +212,7 @@ namespace Under {
 				"debugger,double,enum,export,extends,final,float,goto,implements,import,int,interface,long,native," +
 				"package,private,protected,public,short,static,super,synchronized,throws,transient,volatile").Split(',');
 			foreach (var reservedWord in reservedWords) {
-				otherExists[reservedWord] = true;
+				otherExists.Add(reservedWord);
 			}
 
 			// Build the letters array to use for identifiers by populating it with the most popular letters
@@ -226,7 +233,7 @@ namespace Under {
 				letters = new[] { illegalBeginningCharPattern.Replace(bestLetters, ""), bestLetters };
 			}
 
-			Console.WriteLine("Using letters: " + string.Join(" ", letters));
+			Console.WriteLine("Using letters: -l " + string.Join(",", letters));
 
 			// Move word frequency distribution into an array so it can be sorted
 			var replacementWork = matchFreq.Map(kv => new WordReplace { Frequency = kv.Value, Original = kv.Key, Replacement = null });
@@ -241,7 +248,7 @@ namespace Under {
 				do {
 					replacement = IdentifierFromLetters(counter, letters);
 					++counter;
-				} while (otherExists.ContainsKey(replacement));
+				} while (otherExists.Contains(replacement));
 				replacementWork[index].Replacement = replacement;
 			}
 
@@ -250,19 +257,25 @@ namespace Under {
 
 			// Sort array by descending length (so we replace long strings before short strings)
 			// If we accidentally replaced "zig_" before "zig_ging_" then it would break identifiers
+			// We make sure we only replace whole words to try to guard against this
 			Array.Sort(replacementWork, (a, b) => b.Original.Length - a.Original.Length);
 
 			// Replace everything by its designated replacement
+			var outputContents = fileContents.Map(s => s);
 			foreach (var item in replacementWork) {
 				var original = new Regex(@"\b" + item.Original.Replace("$", @"\$") + @"\b");
 				for (int index = 0, len = fileContents.Length; index < len; ++index) {
-					fileContents[index] = original.Replace(fileContents[index], item.Replacement);
+					outputContents[index] = original.Replace(outputContents[index], item.Replacement);
 				}
 			}
 
-			// Go through each file and write out
+			// Go through each file and write out the new contents if anything changed
 			for (int index = 0, length = fileNames.Count; index < length; ++index) {
-				File.WriteAllText(fileNames[index], fileContents[index]);
+				if (outputContents[index] != fileContents[index]) {
+					// Write byte order marks because text files might be misinterpreted otherwise
+					File.WriteAllText(fileNames[index], fileContents[index], new UTF8Encoding(
+						encoderShouldEmitUTF8Identifier: true, throwOnInvalidBytes: false));
+				}
 			}
 		}
 	}
