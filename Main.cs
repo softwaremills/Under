@@ -273,7 +273,7 @@ namespace Under {
 			for (int index = 0, length = fileNames.Count; index < length; ++index) {
 				if (outputContents[index] != fileContents[index]) {
 					// Write byte order marks because text files might be misinterpreted otherwise
-					File.WriteAllText(fileNames[index], fileContents[index], new UTF8Encoding(
+					File.WriteAllText(fileNames[index], outputContents[index], new UTF8Encoding(
 						encoderShouldEmitUTF8Identifier: true, throwOnInvalidBytes: false));
 				}
 			}
